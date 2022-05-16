@@ -1,0 +1,5 @@
+outs:
+- md5: 85d9d2ddd94c34424994c3148fb7f298.dir
+  size: 29527221
+  nfiles: 2
+  path: filtered
