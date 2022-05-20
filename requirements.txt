@@ -7,3 +7,5 @@ tqdm
 sentencepiece
 torch
 scipy
+git_root
+dvc[gdrive]
