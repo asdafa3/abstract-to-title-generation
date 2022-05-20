@@ -1,7 +1,9 @@
 datasets
 transformers
 pandas
-operator
 nltk
 numpy
 tqdm
+sentencepiece
+torch
+scipy
