@@ -50,7 +50,7 @@ def print_row(id, title, abstract):
 def print_help():
     print("Allowed inputs:\n")
     for row in [
-        ["?/h", "this help"],
+        ["[?, h]", "this help"],
         ["[0, 1, 2]", "a humor score for this title"],
         ["q", "quit"]
     ]:
