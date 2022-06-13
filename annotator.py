@@ -125,8 +125,12 @@ def write_scores(outpath, scores):
 def main(args):
     #print(args)
     if args.range:
+        print("range")
         skiprows=args.range[0]
         nrows=args.range[1]-args.range[0]
+    else:
+        skiprows=None
+        nrows=None
     df = read_dataframe(args, skiprows, nrows)
     nrows = len(df.index)
     scores = step_rows(df, nrows)
