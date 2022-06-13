@@ -6,10 +6,13 @@ import pandas as pd
 from pathlib import Path
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Step through csv and write data for each cell.")
+    parser = argparse.ArgumentParser(
+        description="Step through csv and write data for each cell.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument(
         "input",
-        metavar="I",
+        metavar="INPUT",
         type=argparse.FileType('r', encoding="utf8"),
         help=".csv file to step through."
     )
