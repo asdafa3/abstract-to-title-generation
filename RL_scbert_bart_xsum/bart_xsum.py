@@ -15,8 +15,8 @@ model_checkpoint = 'facebook/bart-large-xsum'
 from datasets import load_metric
 
 from transformers import AutoTokenizer
-    
-    
+from config import *
+
 tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
 from transformers import AutoModelForSeq2SeqLM, DataCollatorForSeq2Seq, Seq2SeqTrainingArguments, Seq2SeqTrainer
 
@@ -24,7 +24,7 @@ model = AutoModelForSeq2SeqLM.from_pretrained(model_checkpoint)
 
 #@title Load Data
 import pandas as pd
-df = pd.read_csv("D:\\Thesis\\data\\1024_characters_pairs.csv", index_col=0)
+df = pd.read_csv(f"{FILTERED_DATA}/1024_characters_pairs.csv", index_col=0)
 
 df = df.drop(columns=["title_length", "abstract_length", "token_len"])
 df_train = df[:11864]
@@ -118,14 +118,14 @@ trainer.train()
 """# **Generation**"""
 
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
-model = AutoModelForSeq2SeqLM.from_pretrained("/content/drive/MyDrive/Thesis/output/bart_large_xsum")
+model = AutoModelForSeq2SeqLM.from_pretrained(f"{MODEL_DIR}/bart_large_xsum")
 tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
 
 import pandas as pd
 
 model.to("cuda")
 
-test_samples = pd.read_csv("/content/drive/MyDrive/Thesis/data/1024_length_data/test_pairs.csv", index_col=0)
+test_samples = pd.read_csv(f"{DATA_DIR}/1024_length_data/test_pairs.csv", index_col=0)
 test_samples
 
 test_samples["token_len"] = test_samples["abstract"].apply(lambda s: len('<pad>' + s + '</s>'))
@@ -167,4 +167,4 @@ preds, titles = creat_eval_pairs(model, tokenizer, abstracts, titles)
 
 pred_target_pairs = pd.DataFrame(list(zip(preds, titles)), columns=['predictions', 'targets'])
 
-pred_target_pairs.to_csv("/content/drive/MyDrive/Thesis/output/preds_targets_pairs/bart-large-xsum2.csv")
+pred_target_pairs.to_csv(f"{OUTPUT_DIR}/preds_targets_pairs/bart-large-xsum2.csv")

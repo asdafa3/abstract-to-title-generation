@@ -187,7 +187,7 @@ def ACT_step(title_score_pairs, start_ids, stop_ids, tokenizer, model, ppo_train
                 max_length = 30,
                 num_beams = 5,
                 num_return_sequences = 1,
-                repetition_penalty=2.0, 
+                repetition_penalty=2.0,
                 length_penalty=10.0,
                 early_stopping = True,
                 ).to('cuda')'''
@@ -195,7 +195,6 @@ def ACT_step(title_score_pairs, start_ids, stop_ids, tokenizer, model, ppo_train
                 attention_mask = query_tensor["attention_mask"], max_new_tokens=30, **gen_kwargs)[-30:].to('cuda')
     response_txt = tokenizer.batch_decode(response_tensor, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
     #test ref model response(generated title from fine-tunde bart-xsum)
-    
 
     # define a reward for response
     t = '[CLS]' + query_txt + '[SEP]' + response_txt
@@ -215,7 +214,7 @@ def ACT_step(title_score_pairs, start_ids, stop_ids, tokenizer, model, ppo_train
                 max_length = 30,
                 num_beams = 5,
                 num_return_sequences = 1,
-                repetition_penalty=2.0, 
+                repetition_penalty=2.0,
                 length_penalty=10.0,
                 early_stopping = True,
                 )'''
@@ -348,7 +347,7 @@ res = ACT_step(gen_title_score_pairs_bestone, 0, len(gen_title_score_pairs_besto
 """# **Debug**"""
 
 query_txt = "This bachelor thesis explores the generation of title based on a given abstract using neural language model. Recently, neural language models have been used in many scenarios with practical applications. For example, in scientific writing, automatic summary generation from long texts is used to assist in the reading and selection of relevant scientific articles. Title is an important part of scientific article, but the title generation using neural language and optimization for neural language model based on human preferences are less studied. This thesis addresses this gap and presents an optimized model based on state-of-the-art pre-trained neural language model which generate human-preferred titles from a given abstract. The model is fine-tuned on datasets of scientific article and optimized from human preferences using the novel learning perspective in reinforcement learning environment. The result shows that, the neural language model have powerful capabilities on the abstract-to-title task and the reinforcement learning approach is effective in scalable learning of neural language model."
- 
+
 query_tensor = tokenizer(query_txt, return_tensors="pt").to('cuda')
 
 ref_tensor=model.generate(input_ids = query_tensor["input_ids"], 
