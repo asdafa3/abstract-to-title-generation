@@ -39,7 +39,7 @@ os.chdir(PROJECT_ROOT)
 DATA_DIR = f"{PROJECT_ROOT}/data"
 OUTPUT_DIR = f"{PROJECT_ROOT}/output"
 
-MODEL_DIR = f"{PROJECT_ROOT}/output"
+MODEL_DIR = f"{PROJECT_ROOT}/model"
 
 DATASET_140_ANNOTATED_JSON = f'{OUTPUT_DIR}/annotated_json/dataset_140samples.json'
 

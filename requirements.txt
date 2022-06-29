@@ -10,3 +10,8 @@ scipy
 git_root
 dvc[gdrive]
 rouge_score
+keras
+tensorflow
+sklearn
+sacremoses
+seaborn
