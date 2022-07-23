@@ -1,0 +1,5 @@
+outs:
+- md5: 37f45e5b37ed4f251d91f427911cfeb4.dir
+  size: 1586
+  nfiles: 1
+  path: pretrained_model
