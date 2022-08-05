@@ -16,3 +16,4 @@ sacremoses
 seaborn
 matplotlib
 tensorflow
+colab-xterm
