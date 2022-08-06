@@ -35,7 +35,7 @@ class Excerpt_Dataset(Dataset):
             tokens = tokens + ['[PAD]' for _ in range(self.maxlen - len(tokens))] 
         else:
             tokens = tokens[:self.maxlen-1] + ['[SEP]'] 
-        #Obtain the indices of the tokens in the BERT Vocabulary
+        # Obtain the indices of the tokens in the BERT Vocabulary
         input_ids = self.tokenizer.convert_tokens_to_ids(tokens) 
         input_ids = torch.tensor(input_ids) 
         #Obtain the attention mask i.e a tensor containing 1s for no padded tokens and 0s for padded ones
