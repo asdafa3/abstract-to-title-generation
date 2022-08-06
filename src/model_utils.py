@@ -65,6 +65,46 @@ class BertRegresser(BertPreTrainedModel):
         
         return output
 
+    def evaluate(model, criterion, dataloader, device):
+        model.eval()
+        mean_acc, mean_loss, count = 0, 0, 0
+        preds = []
+        lst_label = []
+        with torch.no_grad():
+            for input_ids, attention_mask, target in (dataloader):
+
+                input_ids, attention_mask, target = input_ids.to(device), attention_mask.to(device), target.to(device)
+                output = model(input_ids, attention_mask)
+                preds += output
+                lst_label += target
+                mean_loss += criterion(output, target.type_as(output)).item()
+                # mean_err += get_rmse(output, target)
+                count += 1
+            predss = np.array([x.cpu().data.numpy().tolist() for x in preds]).squeeze()
+            lst_labels = np.array([x.cpu().data.numpy().tolist() for x in lst_label]).squeeze()
+            corr = stats.spearmanr(predss, lst_labels)
+        return corr[0] #mean_loss/count
+
+    def train(model, criterion, optimizer, train_loader, val_loader, epochs, device):
+        best_acc = 0
+        for epoch in trange(epochs, desc="Epoch"):
+            model.train()
+            train_loss = 0
+            for i, (input_ids, attention_mask, target) in enumerate(iterable=train_loader):
+                optimizer.zero_grad()  
+                input_ids, attention_mask, target = input_ids.to(device), attention_mask.to(device), target.to(device)
+
+                output = model(input_ids=input_ids, attention_mask=attention_mask)
+                loss = criterion(output, target.type_as(output))
+                loss.backward()
+                optimizer.step()
+
+                train_loss += loss.item()
+
+            print(f"Training loss is {train_loss/len(train_loader)}")
+            val_loss = evaluate(model=model, criterion=criterion, dataloader=val_loader, device=device)
+            print("Epoch {} complete! Correlations : {}".format(epoch, val_loss))
+
 # Index mapping
 map_model = [
     ['bart_xsum', 'bart_cnn', 't5', 'pegasus_xsum', 'original', 'gpt2'],
