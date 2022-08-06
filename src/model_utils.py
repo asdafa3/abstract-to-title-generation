@@ -6,6 +6,7 @@ from tqdm import trange
 import torch.nn as nn
 from transformers import BertModel, BertPreTrainedModel
 import torch.nn as nn
+from scipy import stats
 
 class Excerpt_Dataset(Dataset):
 
@@ -65,8 +66,8 @@ class BertRegresser(BertPreTrainedModel):
         
         return output
 
-    def evaluate(model, criterion, dataloader, device):
-        model.eval()
+    def evaluate(self, criterion, dataloader, device):
+        self.eval()
         mean_acc, mean_loss, count = 0, 0, 0
         preds = []
         lst_label = []
@@ -74,7 +75,7 @@ class BertRegresser(BertPreTrainedModel):
             for input_ids, attention_mask, target in (dataloader):
 
                 input_ids, attention_mask, target = input_ids.to(device), attention_mask.to(device), target.to(device)
-                output = model(input_ids, attention_mask)
+                output = self(input_ids, attention_mask)
                 preds += output
                 lst_label += target
                 mean_loss += criterion(output, target.type_as(output)).item()
@@ -85,16 +86,16 @@ class BertRegresser(BertPreTrainedModel):
             corr = stats.spearmanr(predss, lst_labels)
         return corr[0] #mean_loss/count
 
-    def train(model, criterion, optimizer, train_loader, val_loader, epochs, device):
+    def train_fn(self, criterion, optimizer, train_loader, val_loader, epochs, device):
         best_acc = 0
         for epoch in trange(epochs, desc="Epoch"):
-            model.train()
+            super().train()
             train_loss = 0
             for i, (input_ids, attention_mask, target) in enumerate(iterable=train_loader):
                 optimizer.zero_grad()  
                 input_ids, attention_mask, target = input_ids.to(device), attention_mask.to(device), target.to(device)
 
-                output = model(input_ids=input_ids, attention_mask=attention_mask)
+                output = self(input_ids=input_ids, attention_mask=attention_mask)
                 loss = criterion(output, target.type_as(output))
                 loss.backward()
                 optimizer.step()
@@ -102,7 +103,7 @@ class BertRegresser(BertPreTrainedModel):
                 train_loss += loss.item()
 
             print(f"Training loss is {train_loss/len(train_loader)}")
-            val_loss = evaluate(model=model, criterion=criterion, dataloader=val_loader, device=device)
+            val_loss = self.evaluate(criterion=criterion, dataloader=val_loader, device=device)
             print("Epoch {} complete! Correlations : {}".format(epoch, val_loss))
 
 # Index mapping
