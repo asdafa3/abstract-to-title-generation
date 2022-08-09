@@ -1,50 +1,11 @@
 import numpy as np
 import torch
-from torch.utils.data import Dataset
 from datasets import Dataset
 from tqdm import trange 
 import torch.nn as nn
 from transformers import BertModel, BertPreTrainedModel
 import torch.nn as nn
 from scipy import stats
-
-class Excerpt_Dataset(Dataset):
-
-    def __init__(self, data, maxlen, tokenizer): 
-        #Store the contents of the file in a pandas dataframe
-        self.df = data.reset_index()
-        #Initialize the tokenizer for the desired transformer model
-        self.tokenizer = tokenizer
-        #Maximum length of the tokens list to keep all the sequences of fixed size
-        self.maxlen = maxlen
-
-    def __len__(self):
-        return self.df.shape[0]
-
-    def __getitem__(self, index):    
-        #Select the sentence and label at the specified index in the data frame
-        excerpt = self.df.loc[index, 'excerpt']
-        try:
-            target = float(self.df.loc[index, 'target'])
-        except:
-            target = 0.0
-        #identifier = self.df.loc[index, 'id']
-        #Preprocess the text to be suitable for the transformer
-        tokens = self.tokenizer.tokenize(excerpt) 
-        tokens = ['[CLS]'] + tokens + ['[SEP]'] 
-        if len(tokens) < self.maxlen:
-            tokens = tokens + ['[PAD]' for _ in range(self.maxlen - len(tokens))] 
-        else:
-            tokens = tokens[:self.maxlen-1] + ['[SEP]'] 
-        # Obtain the indices of the tokens in the BERT Vocabulary
-        input_ids = self.tokenizer.convert_tokens_to_ids(tokens) 
-        input_ids = torch.tensor(input_ids) 
-        #Obtain the attention mask i.e a tensor containing 1s for no padded tokens and 0s for padded ones
-        attention_mask = (input_ids != 0).long()
-        
-        target = torch.tensor([target], dtype=torch.float32)
-        
-        return input_ids, attention_mask, target
 
 # Init model
 
@@ -105,7 +66,6 @@ def evaluate(model, criterion, dataloader, device):
     return corr[0] #mean_loss/count
 
 def train(model, criterion, optimizer, train_loader, val_loader, epochs, device):
-    best_acc = 0
     for epoch in trange(epochs, desc="Epoch"):
         model.train()
         train_loss = 0
@@ -121,8 +81,50 @@ def train(model, criterion, optimizer, train_loader, val_loader, epochs, device)
             train_loss += loss.item()
 
         print(f"Training loss is {train_loss/len(train_loader)}")
-        val_loss = model.evaluate(criterion=criterion, dataloader=val_loader, device=device)
+        val_loss = evaluate(model, criterion=criterion, dataloader=val_loader, device=device)
         print("Epoch {} complete! Correlations : {}".format(epoch, val_loss))
+
+def train_humor(model, criterion, optimizer, train_loader, val_loader, epochs, device):
+    # used for predicting target quality
+    assert train_loader.dataset.humor
+    assert val_loader.dataset.humor
+    for epoch in trange(epochs, desc="Epoch"):
+        model.train()
+        train_loss = 0
+        for i, (input_ids, attention_mask, target) in enumerate(iterable=train_loader):
+            optimizer.zero_grad()
+            input_ids, attention_mask, target = input_ids.to(device), attention_mask.to(device), target.to(device)
+            output = model(input_ids, attention_mask)
+            loss = criterion(output, target.type_as(output))
+            loss.backward()
+            optimizer.step()
+
+            train_loss += loss.item()
+
+        print(f"Training loss is {train_loss/len(train_loader)}")
+        val_loss = evaluate_humor(model, criterion=criterion, dataloader=val_loader, device=device)
+        print("Epoch {} complete! Correlations : {}".format(epoch, val_loss))
+
+def evaluate_humor(model, criterion, dataloader, device):
+    assert dataloader.dataset.humor
+    model.eval()
+    mean_acc, mean_loss, count = 0, 0, 0
+    preds = []
+    lst_label = []
+    with torch.no_grad():
+        for input_ids, attention_mask, target in (dataloader):
+
+            input_ids, attention_mask, target = input_ids.to(device), attention_mask.to(device), target.to(device)
+            output = model(input_ids, attention_mask)
+            preds += output
+            lst_label += target
+            mean_loss += criterion(output, target.type_as(output)).item()
+            # mean_err += get_rmse(output, target)
+            count += 1
+        predss = np.array([x.cpu().data.numpy().tolist() for x in preds]).squeeze()
+        lst_labels = np.array([x.cpu().data.numpy().tolist() for x in lst_label]).squeeze()
+        corr = stats.spearmanr(predss, lst_labels)
+    return corr[0] #mean_loss/count
 
 # Index mapping
 map_model = [

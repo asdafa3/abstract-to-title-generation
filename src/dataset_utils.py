@@ -2,8 +2,48 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from config import *
-from model_utils import Excerpt_Dataset
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
+
+class Excerpt_Dataset(Dataset):
+
+    def __init__(self, data, maxlen, tokenizer, humor=False):
+        #Store the contents of the file in a pandas dataframe
+        self.df = data.reset_index()
+        #Initialize the tokenizer for the desired transformer model
+        self.tokenizer = tokenizer
+        #Maximum length of the tokens list to keep all the sequences of fixed size
+        self.maxlen = maxlen
+        self.humor = humor
+
+    def __len__(self):
+        return self.df.shape[0]
+
+    def __getitem__(self, index):
+        #Select the sentence and label at the specified index in the data frame
+        excerpt = self.df.loc[index, 'excerpt']
+        try:
+            if self.humor:
+                target = self.df.loc[index, 'target']
+                target = torch.tensor(target, dtype=torch.float32)
+            else:
+                target = float(self.df.loc[index, 'target'])
+                target = torch.tensor([target], dtype=torch.float32)
+        except:
+            target = torch.tensor([0.0], dtype=torch.float32)
+        #identifier = self.df.loc[index, 'id']
+        #Preprocess the text to be suitable for the transformer
+        tokens = self.tokenizer.tokenize(excerpt)
+        tokens = ['[CLS]'] + tokens + ['[SEP]']
+        # Obtain the indices of the tokens in the BERT Vocabulary
+        if len(tokens) < self.maxlen:
+            tokens = tokens + ['[PAD]' for _ in range(self.maxlen - len(tokens))]
+        else:
+            tokens = tokens[:self.maxlen-1] + ['[SEP]']
+        input_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+        input_ids = torch.tensor(input_ids)
+        #Obtain the attention mask i.e a tensor containing 1s for no padded tokens and 0s for padded ones
+        attention_mask = (input_ids != 0).long()
+        return input_ids, attention_mask, target
 
 
 def match_titles(titles, classes, fillin):
@@ -22,7 +62,7 @@ def match_titles(titles, classes, fillin):
   return matched_titles
 
 
-def gen_datasets(tokenizer, annotations, max_len, batch_size, num_threads, humor=None):
+def gen_datasets(tokenizer, annotations, max_len, batch_size, num_threads):
     # title dataframe
     title_classes = ['human_title', 'bart_base', 'bart_cnn', 'bart_xsum', 't5_small', 'gpt2', 'pegasus_xsum']
     human_annotation_pairs = []
@@ -83,27 +123,11 @@ def gen_datasets(tokenizer, annotations, max_len, batch_size, num_threads, humor
                 print('found nan score')
             if t=='':
                 print('found empty title')
-            if humor is None:
-                lst.append([ab[0] + '[SEP]' + t, s])
-            else:
-                lst.append(["humor={humor}#" + ab[0] + '[SEP]' + t, s])
+            lst.append((ab[0] + '[SEP]' + t, s))
     df = pd.DataFrame(np.array(lst))
     df.columns = ['excerpt', 'target']
     #dataframe = dataframe.sample(frac=1, random_state=42).reset_index(drop=True)
-    train_ratio = 0.7
-    val_ration = 0.1
-    test_ratio = 0.2
-    df_len = 230
-    train_range = round(6 * train_ratio * df_len)
-    val_range = round(6 * val_ration * df_len)
-    test_range = round(6 * test_ratio * df_len)
-
-    print(f"{train_range}-{val_range}-{test_range}")
-
-    dftrain = df[:train_range].reset_index(drop=True)
-    dfdev = df[val_range:test_range].reset_index(drop=True)
-    dftest = df[test_range:].reset_index(drop=True)
-
+    dftrain, dfdev, dftest = split_dataframe(df)
     Path(f'{OUTPUT_DIR}/reward_model_robust_test/').mkdir(parents=True, exist_ok=True)
 
     dftrain.to_csv(f'{OUTPUT_DIR}/reward_model_robust_test/sciBert_shuffled_train.csv')
@@ -117,5 +141,62 @@ def gen_datasets(tokenizer, annotations, max_len, batch_size, num_threads, humor
     train_loader = DataLoader(dataset=train_set, batch_size=batch_size, num_workers=num_threads, shuffle=True)
     dev_loader = DataLoader(dataset=dev_set, batch_size=batch_size, num_workers=num_threads, shuffle=True)
     test_loader = DataLoader(dataset=test_set, batch_size=batch_size, num_workers=num_threads, shuffle=True)
+
+    return train_loader, dev_loader, test_loader
+
+def split_dataframe(df):
+    train_ratio = 0.7
+    val_ration = 0.1
+    test_ratio = 0.2
+    df_len = 230
+    train_range = round(6 * train_ratio * df_len)
+    val_range = round(6 * val_ration * df_len)
+    test_range = round(6 * test_ratio * df_len)
+
+    print(f"{train_range}-{val_range}-{test_range}")
+
+    dftrain = df[:train_range].reset_index(drop=True)
+    dfdev = df[val_range:test_range].reset_index(drop=True)
+    dftest = df[test_range:].reset_index(drop=True)
+    return dftrain, dfdev, dftest
+
+def add_humor_token(tokenizer, model):
+    tokenizer.add_tokens([f"[humor={humor}]" for humor in [0, 1, 2]])
+    model.resize_token_embeddings(len(tokenizer))
+    return tokenizer, model
+
+def gen_humor_dataframe(tokenizer, quality_model, device, annotations, max_len, num_threads):
+    lst = []
+    for i, (abstract, title, humor) in annotations[["abstract", "title", "humor"]].iterrows():
+        if np.isnan(humor):
+            print('found nan score')
+        if title=='':
+            print('found empty title')
+        lst.append([abstract + '[SEP]' + title, humor])
+
+    df = pd.DataFrame(np.array(lst))
+    df.columns = ['excerpt', 'target']
+    quality_set = Excerpt_Dataset(data=df, maxlen=max_len, tokenizer=tokenizer)
+    quality_loader = DataLoader(dataset=quality_set, num_workers=num_threads, shuffle=True)
+    with torch.no_grad():
+        for i, (input_ids, attention_mask, humor_target) in enumerate(quality_loader):
+            input_ids, attention_mask = input_ids.to(device), attention_mask.to(device)
+            pred_quality = quality_model(input_ids, attention_mask)
+            df.loc[i, 'target'] = (pred_quality, humor_target)
+            humor_level = int(round(float(humor_target))) + 1
+            df.loc[i, 'excerpt'] = f"[humor={humor_level}]" + df.loc[i, 'excerpt']
+
+    return df
+
+def gen_humor_datasets(tokenizer, df, max_len, num_threads):
+    dftrain, dfdev, dftest = split_dataframe(df)
+
+    train_set = Excerpt_Dataset(data=dftrain, maxlen=max_len, tokenizer=tokenizer, humor=True)
+    dev_set = Excerpt_Dataset(data=dfdev, maxlen=max_len, tokenizer=tokenizer, humor=True)
+    test_set = Excerpt_Dataset(data=dftest, maxlen=max_len, tokenizer=tokenizer, humor=True)
+
+    train_loader = DataLoader(dataset=train_set, num_workers=num_threads, shuffle=True)
+    dev_loader = DataLoader(dataset=dev_set, num_workers=num_threads, shuffle=True)
+    test_loader = DataLoader(dataset=test_set, num_workers=num_threads, shuffle=True)
 
     return train_loader, dev_loader, test_loader
