@@ -3,6 +3,7 @@ import numpy as np
 from pathlib import Path
 from config import *
 from torch.utils.data import DataLoader, Dataset
+import copy
 
 class Excerpt_Dataset(Dataset):
 
@@ -127,7 +128,7 @@ def gen_datasets(tokenizer, annotations, max_len, batch_size, num_threads):
     df = pd.DataFrame(np.array(lst))
     df.columns = ['excerpt', 'target']
     #dataframe = dataframe.sample(frac=1, random_state=42).reset_index(drop=True)
-    dftrain, dfdev, dftest = split_dataframe(df)
+    dftrain, dfdev, dftest = split_dataframe(df, batch_size)
     Path(f'{OUTPUT_DIR}/reward_model_robust_test/').mkdir(parents=True, exist_ok=True)
 
     dftrain.to_csv(f'{OUTPUT_DIR}/reward_model_robust_test/sciBert_shuffled_train.csv')
@@ -144,20 +145,22 @@ def gen_datasets(tokenizer, annotations, max_len, batch_size, num_threads):
 
     return train_loader, dev_loader, test_loader
 
-def split_dataframe(df):
+def split_dataframe(df, batch_size=1):
     train_ratio = 0.7
     val_ration = 0.1
     test_ratio = 0.2
-    df_len = 230
-    train_range = round(6 * train_ratio * df_len)
-    val_range = round(6 * val_ration * df_len)
-    test_range = round(6 * test_ratio * df_len)
+    df_len = len(df) / batch_size
+    train_range = batch_size * round(train_ratio * df_len)
+    val_range = batch_size * round(val_ration * df_len)
+    test_range = batch_size * round(test_ratio * df_len)
+
+    # assert df_len == train_range + val_range + test_range
 
     print(f"{train_range}-{val_range}-{test_range}")
 
     dftrain = df[:train_range].reset_index(drop=True)
-    dfdev = df[val_range:test_range].reset_index(drop=True)
-    dftest = df[test_range:].reset_index(drop=True)
+    dfdev = df[train_range : train_range + val_range].reset_index(drop=True)
+    dftest = df[train_range + val_range:].reset_index(drop=True)
     return dftrain, dfdev, dftest
 
 def add_humor_token(tokenizer, model):
@@ -176,17 +179,18 @@ def gen_humor_dataframe(tokenizer, quality_model, device, annotations, max_len, 
 
     df = pd.DataFrame(np.array(lst))
     df.columns = ['excerpt', 'target']
-    quality_set = Excerpt_Dataset(data=df, maxlen=max_len, tokenizer=tokenizer)
+    df_new = copy.deepcopy(df)
+    quality_set = Excerpt_Dataset(data=df_new, maxlen=max_len, tokenizer=tokenizer)
     quality_loader = DataLoader(dataset=quality_set, num_workers=num_threads, shuffle=True)
     with torch.no_grad():
         for i, (input_ids, attention_mask, humor_target) in enumerate(quality_loader):
             input_ids, attention_mask = input_ids.to(device), attention_mask.to(device)
             pred_quality = quality_model(input_ids, attention_mask)
-            df.loc[i, 'target'] = (pred_quality, humor_target)
+            df_new.loc[i, 'target'] = (float(pred_quality.cpu()), float(humor_target))
             humor_level = int(round(float(humor_target))) + 1
-            df.loc[i, 'excerpt'] = f"[humor={humor_level}]" + df.loc[i, 'excerpt']
+            df_new.loc[i, 'excerpt'] = f"[humor={humor_level}]" + df_new.loc[i, 'excerpt']
 
-    return df
+    return df_new
 
 def gen_humor_datasets(tokenizer, df, max_len, num_threads):
     dftrain, dfdev, dftest = split_dataframe(df)
@@ -198,5 +202,7 @@ def gen_humor_datasets(tokenizer, df, max_len, num_threads):
     train_loader = DataLoader(dataset=train_set, num_workers=num_threads, shuffle=True)
     dev_loader = DataLoader(dataset=dev_set, num_workers=num_threads, shuffle=True)
     test_loader = DataLoader(dataset=test_set, num_workers=num_threads, shuffle=True)
+
+    return train_loader, dev_loader, test_loader
 
     return train_loader, dev_loader, test_loader
