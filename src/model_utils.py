@@ -8,6 +8,11 @@ import torch.nn as nn
 from scipy import stats
 
 # Init model
+def setup_seed(seed):
+  torch.manual_seed(seed)
+  torch.cuda.manual_seed_all(seed)
+  np.random.seed(seed)
+  torch.backends.cudnn.deteministic = True
 
 class BertRegresser(BertPreTrainedModel):
     def __init__(self, config, dropout=0.5):
