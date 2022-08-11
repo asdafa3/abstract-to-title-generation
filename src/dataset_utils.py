@@ -73,7 +73,7 @@ def gen_datasets(tokenizer, annotations, max_len, batch_size, num_threads):
 
     human_annotations_230 = pd.DataFrame(np.array(human_annotation_pairs))
     human_annotations_230.columns = ["abstract"] + title_classes
-    display(human_annotations_230)
+    #display(human_annotations_230)
 
     human_annotations_230.to_csv(f'{DATA_DIR}/annotated/230_annotations_pairs.csv')
 
@@ -85,7 +85,7 @@ def gen_datasets(tokenizer, annotations, max_len, batch_size, num_threads):
 
     human_scores_230 = pd.DataFrame(np.array(human_scores))
     human_scores_230.columns = title_classes
-    display(human_scores_230)
+    #display(human_scores_230)
 
     human_scores_230.to_csv(f'{DATA_DIR}/annotated/230_humanannotation_withoutunannotated.csv')
 
@@ -94,7 +94,7 @@ def gen_datasets(tokenizer, annotations, max_len, batch_size, num_threads):
 
     text_map.fillna('', inplace=True)
     scores.fillna('', inplace=True)
-    display(scores)
+    #display(scores)
 
     abstract_df =text_map[['abstract']]
     title_df = text_map[['human_title', 'bart_base', 'bart_cnn', 'bart_xsum', 't5_small', 'gpt2', 'pegasus_xsum']]
@@ -127,6 +127,7 @@ def gen_datasets(tokenizer, annotations, max_len, batch_size, num_threads):
             lst.append((ab[0] + '[SEP]' + t, s))
     df = pd.DataFrame(np.array(lst))
     df.columns = ['excerpt', 'target']
+    display(df)
     #dataframe = dataframe.sample(frac=1, random_state=42).reset_index(drop=True)
     dftrain, dfdev, dftest = split_dataframe(df, batch_size)
     Path(f'{OUTPUT_DIR}/reward_model_robust_test/').mkdir(parents=True, exist_ok=True)
@@ -152,7 +153,7 @@ def split_dataframe(df, batch_size=1):
     df_len = len(df) / batch_size
     train_range = batch_size * round(train_ratio * df_len)
     val_range = batch_size * round(val_ration * df_len)
-    test_range = batch_size * round(test_ratio * df_len)
+    test_range = df_len - (train_range + val_range)
 
     # assert df_len == train_range + val_range + test_range
 
@@ -202,7 +203,5 @@ def gen_humor_datasets(tokenizer, df, max_len, num_threads):
     train_loader = DataLoader(dataset=train_set, num_workers=num_threads, shuffle=True)
     dev_loader = DataLoader(dataset=dev_set, num_workers=num_threads, shuffle=True)
     test_loader = DataLoader(dataset=test_set, num_workers=num_threads, shuffle=True)
-
-    return train_loader, dev_loader, test_loader
 
     return train_loader, dev_loader, test_loader

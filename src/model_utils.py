@@ -110,21 +110,23 @@ def evaluate_humor(model, criterion, dataloader, device):
     model.eval()
     mean_acc, mean_loss, count = 0, 0, 0
     preds = []
-    lst_label = []
+    labels = []
+
     with torch.no_grad():
         for input_ids, attention_mask, target in (dataloader):
-
             input_ids, attention_mask, target = input_ids.to(device), attention_mask.to(device), target.to(device)
             output = model(input_ids, attention_mask)
-            preds += output
-            lst_label += target
+            preds += output.cpu().data.numpy().tolist()
+            labels += target.cpu().data.numpy().tolist()
             mean_loss += criterion(output, target.type_as(output)).item()
             # mean_err += get_rmse(output, target)
             count += 1
-        predss = np.array([x.cpu().data.numpy().tolist() for x in preds]).squeeze()
-        lst_labels = np.array([x.cpu().data.numpy().tolist() for x in lst_label]).squeeze()
-        corr = stats.spearmanr(predss, lst_labels)
-    return corr[0] #mean_loss/count
+    preds = np.array(preds)
+    labels = np.array(labels)
+    return [
+        stats.spearmanr(preds[:, ax], labels[:, ax])[0]
+        for ax in [0, 1]
+    ]
 
 # Index mapping
 map_model = [
