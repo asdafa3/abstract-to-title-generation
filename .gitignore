@@ -4,3 +4,4 @@
 /bart-base-finetuned-lm_al_paper
 **/__pycache__/
 /reward_model
+.history
